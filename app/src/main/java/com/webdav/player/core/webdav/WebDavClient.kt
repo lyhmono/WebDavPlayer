@@ -183,6 +183,23 @@ class WebDavClient(
     }
 
     /**
+     * PUT: 上传文件（带 RequestBody，支持进度跟踪）
+     *
+     * @param path 目标路径
+     * @param requestBody 请求体
+     */
+    fun uploadFile(path: String, requestBody: RequestBody) {
+        val url = buildUrl(path)
+        val request = Request.Builder()
+            .url(url)
+            .put(requestBody)
+            .header("Authorization", authHeader)
+            .build()
+
+        executeRequest(request).close()
+    }
+
+    /**
      * MKCOL: 创建目录
      *
      * @param path 目录路径

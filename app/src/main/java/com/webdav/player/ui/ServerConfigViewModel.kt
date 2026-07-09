@@ -118,6 +118,13 @@ class ServerConfigViewModel @Inject constructor(
     fun dismissTestResult() {
         _uiState.value = _uiState.value.copy(testResult = null)
     }
+
+    /**
+     * 根据 ID 获取服务器配置（用于导航传参）
+     */
+    suspend fun getServerById(id: Long): ServerConfig? {
+        return serverConfigRepository.getById(id)
+    }
 }
 
 enum class FormField { NAME, URL, USERNAME, PASSWORD }

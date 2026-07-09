@@ -4,6 +4,11 @@ import com.webdav.player.core.webdav.WebDavClient
 import com.webdav.player.core.webdav.WebDavEntry
 import com.webdav.player.data.model.ServerConfig
 import com.webdav.player.data.model.WebDavEntry as DomainWebDavEntry
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.File
+import java.io.InputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -59,6 +64,113 @@ class WebDavRepository @Inject constructor(
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    /**
+     * 上传文件
+     *
+     * @param serverConfig 服务器配置
+     * @param path 目标路径
+     * @param inputStream 文件输入流
+     * @param contentType MIME 类型
+     * @param onProgress 进度回调（0.0 ~ 1.0）
+     */
+    suspend fun uploadFile(
+        serverConfig: ServerConfig,
+        path: String,
+        inputStream: InputStream,
+        contentType: String = "application/octet-stream",
+        onProgress: ((Float) -> Unit)? = null
+    ): Result<Unit> {
+        return try {
+            val client = getClient(serverConfig)
+            // 对于带进度跟踪的上传，先将流写入临时文件
+            val tempFile = File.createTempFile("upload_", ".tmp")
+            tempFile.deleteOnExit()
+
+            var totalBytes = 0L
+            tempFile.outputStream().use { output ->
+                val buffer = ByteArray(8192)
+                var bytesRead: Int
+                while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                    output.write(buffer, 0, bytesRead)
+                    totalBytes += bytesRead
+                }
+            }
+            inputStream.close()
+
+            // 使用带进度的上传
+            val requestBody = tempFile.asRequestBody(contentType.toMediaType())
+            val progressBody = ProgressRequestBody(requestBody) { sent, total ->
+                onProgress?.invoke(if (total > 0) sent.toFloat() / total.toFloat() else 0f)
+            }
+
+            client.uploadFile(path, progressBody)
+            tempFile.delete()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 删除文件
+     */
+    suspend fun deleteFile(serverConfig: ServerConfig, path: String): Result<Unit> {
+        return try {
+            val client = getClient(serverConfig)
+            client.delete(path)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 重命名/移动文件
+     */
+    suspend fun renameFile(
+        serverConfig: ServerConfig,
+        oldPath: String,
+        newPath: String
+    ): Result<Unit> {
+        return try {
+            val client = getClient(serverConfig)
+            client.move(oldPath, newPath, overwrite = false)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 创建目录
+     */
+    suspend fun createDirectory(serverConfig: ServerConfig, path: String): Result<Unit> {
+        return try {
+            val client = getClient(serverConfig)
+            client.createDirectory(path)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 获取文件流（用于缩略图提取等）
+     *
+     * @param serverConfig 服务器配置
+     * @param path 文件路径
+     * @param byteRange 可选的字节范围
+     * @return 文件输入流
+     */
+    suspend fun getFileStream(
+        serverConfig: ServerConfig,
+        path: String,
+        byteRange: LongRange? = null
+    ): InputStream {
+        val client = getClient(serverConfig)
+        return client.getFile(path, byteRange)
     }
 
     /**

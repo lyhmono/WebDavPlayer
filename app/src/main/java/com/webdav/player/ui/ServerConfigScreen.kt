@@ -51,6 +51,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ServerConfigScreen(
+    onServerClick: (com.webdav.player.data.model.ServerConfig) -> Unit = {},
     viewModel: ServerConfigViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -227,7 +228,8 @@ fun ServerConfigScreen(
                     items(uiState.savedServers, key = { it.id }) { server ->
                         ServerItemCard(
                             server = server,
-                            onDelete = { viewModel.deleteServer(server.id) }
+                            onDelete = { viewModel.deleteServer(server.id) },
+                            onClick = { onServerClick(server) }
                         )
                     }
                 }
@@ -238,14 +240,18 @@ fun ServerConfigScreen(
 
 @Composable
 private fun ServerItemCard(
-    server: ServerConfig,
-    onDelete: () -> Unit
+    server: com.webdav.player.data.model.ServerConfig,
+    onDelete: () -> Unit,
+    onClick: () -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(Modifier.padding(0.dp)),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+        ),
+        onClick = onClick
     ) {
         Row(
             modifier = Modifier
