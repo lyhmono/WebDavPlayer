@@ -147,6 +147,13 @@ class ThumbnailCacheManager @Inject constructor(
     }
 
     /**
+     * 获取磁盘缓存大小（字节）
+     */
+    fun getDiskCacheSize(): Long {
+        return diskCacheDir.listFiles()?.sumOf { it.length() } ?: 0L
+    }
+
+    /**
      * 清除内存缓存
      */
     fun clearMemoryCache() {

@@ -23,6 +23,7 @@ import com.webdav.player.feature.player.PlayerScreen
 import com.webdav.player.feature.player.PlayerViewModel
 import com.webdav.player.feature.playlist.PlaylistDetailScreen
 import com.webdav.player.feature.playlist.PlaylistScreen
+import com.webdav.player.feature.settings.SettingsScreen
 import com.webdav.player.ui.ServerConfigScreen
 
 /**
@@ -43,6 +44,9 @@ object Routes {
 
     /** 播放列表详情: playlist_detail/{playlistId} */
     const val PLAYLIST_DETAIL = "playlist_detail/{playlistId}"
+
+    /** 设置页面 */
+    const val SETTINGS = "settings"
 
     /**
      * 构建浏览器路由
@@ -78,7 +82,17 @@ fun AppNavigation(
             ServerConfigScreen(
                 onServerClick = { server ->
                     navController.navigate(Routes.browser(server.id, "/"))
+                },
+                onNavigateToSettings = {
+                    navController.navigate(Routes.SETTINGS)
                 }
+            )
+        }
+
+        // 设置页面
+        composable(Routes.SETTINGS) {
+            SettingsScreen(
+                onBack = { navController.popBackStack() }
             )
         }
 

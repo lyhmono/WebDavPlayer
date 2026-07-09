@@ -8,6 +8,7 @@ import com.webdav.player.core.cache.DirectoryCacheManager
 import com.webdav.player.core.cache.ThumbnailCacheManager
 import com.webdav.player.data.model.ServerConfig
 import com.webdav.player.data.model.WebDavEntry
+import com.webdav.player.data.preferences.AppPreferences
 import com.webdav.player.data.repository.ServerConfigRepository
 import com.webdav.player.data.repository.WebDavRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -31,7 +32,8 @@ class BrowserViewModel @Inject constructor(
     private val serverConfigRepository: ServerConfigRepository,
     private val webDavRepository: WebDavRepository,
     private val directoryCacheManager: DirectoryCacheManager,
-    private val thumbnailCacheManager: ThumbnailCacheManager
+    private val thumbnailCacheManager: ThumbnailCacheManager,
+    private val appPreferences: AppPreferences
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(BrowserUiState())
@@ -42,6 +44,25 @@ class BrowserViewModel @Inject constructor(
 
     /** 当前正在进行的加载任务 */
     private var loadJob: Job? = null
+
+    init {
+        // 从偏好设置加载默认排序
+        viewModelScope.launch {
+            appPreferences.defaultSortField.collect { field ->
+                _uiState.update { it.copy(sortField = field) }
+            }
+        }
+        viewModelScope.launch {
+            appPreferences.defaultSortAscending.collect { ascending ->
+                _uiState.update { it.copy(sortAscending = ascending) }
+            }
+        }
+        viewModelScope.launch {
+            appPreferences.directoriesFirst.collect { dirsFirst ->
+                _uiState.update { it.copy(directoriesFirst = dirsFirst) }
+            }
+        }
+    }
 
     /**
      * 初始化：加载服务器配置和目录
@@ -187,22 +208,27 @@ class BrowserViewModel @Inject constructor(
     fun setSortField(field: SortField) {
         _uiState.update { it.copy(sortField = field) }
         applySorting()
+        viewModelScope.launch { appPreferences.setDefaultSortField(field) }
     }
 
     /**
      * 切换排序方向
      */
     fun toggleSortOrder() {
-        _uiState.update { it.copy(sortAscending = !it.sortAscending) }
+        val newAscending = !_uiState.value.sortAscending
+        _uiState.update { it.copy(sortAscending = newAscending) }
         applySorting()
+        viewModelScope.launch { appPreferences.setDefaultSortAscending(newAscending) }
     }
 
     /**
      * 切换目录优先
      */
     fun toggleDirectoriesFirst() {
-        _uiState.update { it.copy(directoriesFirst = !it.directoriesFirst) }
+        val newDirsFirst = !_uiState.value.directoriesFirst
+        _uiState.update { it.copy(directoriesFirst = newDirsFirst) }
         applySorting()
+        viewModelScope.launch { appPreferences.setDirectoriesFirst(newDirsFirst) }
     }
 
     /**
