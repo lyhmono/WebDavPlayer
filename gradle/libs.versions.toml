@@ -18,6 +18,7 @@ okhttp = "4.12.0"
 media3 = "1.5.1"
 splashscreen = "1.0.1"
 coil = "2.7.0"
+libvlc = "3.6.0"
 
 [libraries]
 # AndroidX Core
@@ -73,6 +74,9 @@ androidx-media3-datasource-okhttp = { group = "androidx.media3", name = "media3-
 
 # Coil
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
+
+# LibVLC
+vlc-android = { group = "org.videolan.libvlc", name = "libvlc-all", version.ref = "libvlc" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

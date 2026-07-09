@@ -1,6 +1,7 @@
 package com.webdav.player.core.player
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * 统一播放器引擎接口
@@ -108,4 +109,39 @@ interface PlayerEngine {
      * 释放资源
      */
     fun release()
+
+    // ============ M5: 音轨/字幕支持 ============
+
+    /** 可用音轨列表 */
+    val audioTracks: StateFlow<List<TrackInfo>>
+
+    /** 可用字幕轨列表 */
+    val subtitleTracks: StateFlow<List<TrackInfo>>
+
+    /**
+     * 获取可用音轨列表
+     */
+    fun getAudioTracks(): List<TrackInfo>
+
+    /**
+     * 获取可用字幕轨列表
+     */
+    fun getSubtitleTracks(): List<TrackInfo>
+
+    /**
+     * 选择音轨
+     * @param trackId 轨道 ID
+     */
+    fun selectAudioTrack(trackId: String)
+
+    /**
+     * 选择字幕轨
+     * @param trackId 轨道 ID
+     */
+    fun selectSubtitleTrack(trackId: String)
+
+    /**
+     * 关闭字幕
+     */
+    fun disableSubtitle()
 }

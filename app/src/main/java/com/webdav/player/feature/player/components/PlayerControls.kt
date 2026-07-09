@@ -15,15 +15,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -48,8 +49,8 @@ import kotlinx.coroutines.delay
 /**
  * 播放器控制层
  *
- * 包含顶部栏（返回+标题）和底部控制栏（播放模式/上一首/播放暂停/下一首/播放列表）
- * 支持 3 秒无操作自动隐藏
+ * M5 更新：底部控制栏新增音轨/字幕按钮
+ * 布局：左侧(播放模式+音轨+字幕) 中间(上一首/播放/下一首) 右侧(速度+播放列表)
  */
 @Composable
 fun PlayerControls(
@@ -67,6 +68,8 @@ fun PlayerControls(
     onPlayModeClick: () -> Unit,
     onSpeedClick: () -> Unit,
     onPlaylistClick: () -> Unit,
+    onAudioTrackClick: () -> Unit,
+    onSubtitleClick: () -> Unit,
     onHideControls: () -> Unit
 ) {
     // 自动隐藏
@@ -136,77 +139,100 @@ fun PlayerControls(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // 控制按钮行
+                // 控制按钮行：三段式布局
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // 播放模式
-                    PlayModeButton(
-                        playMode = playMode,
-                        onClick = onPlayModeClick
-                    )
-
-                    // 上一首
-                    IconButton(onClick = onPrevious) {
-                        Icon(
-                            imageVector = Icons.Default.SkipPrevious,
-                            contentDescription = "上一首",
-                            tint = Color.White,
-                            modifier = Modifier.size(36.dp)
-                        )
-                    }
-
-                    // 播放/暂停
-                    IconButton(
-                        onClick = onPlayPause,
-                        modifier = Modifier
-                            .size(56.dp)
-                            .background(
-                                color = Color.White.copy(alpha = 0.2f),
-                                shape = CircleShape
-                            )
+                    // ===== 左侧：播放模式 + 音轨 + 字幕 =====
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Icon(
-                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (isPlaying) "暂停" else "播放",
-                            tint = Color.White,
-                            modifier = Modifier.size(32.dp)
+                        PlayModeButton(
+                            playMode = playMode,
+                            onClick = onPlayModeClick
                         )
+
+                        IconButton(onClick = onAudioTrackClick) {
+                            Icon(
+                                imageVector = Icons.Default.AudioFile,
+                                contentDescription = "音轨",
+                                tint = Color.White
+                            )
+                        }
+
+                        IconButton(onClick = onSubtitleClick) {
+                            Icon(
+                                imageVector = Icons.Default.Subtitles,
+                                contentDescription = "字幕",
+                                tint = Color.White
+                            )
+                        }
                     }
 
-                    // 下一首
-                    IconButton(onClick = onNext) {
-                        Icon(
-                            imageVector = Icons.Default.SkipNext,
-                            contentDescription = "下一首",
-                            tint = Color.White,
-                            modifier = Modifier.size(36.dp)
-                        )
+                    // ===== 中间：上一首 / 播放暂停 / 下一首 =====
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        IconButton(onClick = onPrevious) {
+                            Icon(
+                                imageVector = Icons.Default.SkipPrevious,
+                                contentDescription = "上一首",
+                                tint = Color.White,
+                                modifier = Modifier.size(36.dp)
+                            )
+                        }
+
+                        IconButton(
+                            onClick = onPlayPause,
+                            modifier = Modifier
+                                .size(56.dp)
+                                .background(
+                                    color = Color.White.copy(alpha = 0.2f),
+                                    shape = CircleShape
+                                )
+                        ) {
+                            Icon(
+                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = if (isPlaying) "暂停" else "播放",
+                                tint = Color.White,
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
+
+                        IconButton(onClick = onNext) {
+                            Icon(
+                                imageVector = Icons.Default.SkipNext,
+                                contentDescription = "下一首",
+                                tint = Color.White,
+                                modifier = Modifier.size(36.dp)
+                            )
+                        }
                     }
 
-                    // 播放列表
-                    IconButton(onClick = onPlaylistClick) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.QueueMusic,
-                            contentDescription = "播放列表",
-                            tint = Color.White
-                        )
-                    }
-                }
+                    // ===== 右侧：速度 + 播放列表 =====
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        IconButton(onClick = onSpeedClick) {
+                            Icon(
+                                imageVector = Icons.Default.Speed,
+                                contentDescription = "播放速度",
+                                tint = Color.White
+                            )
+                        }
 
-                // 速度按钮
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    IconButton(onClick = onSpeedClick) {
-                        Icon(
-                            imageVector = Icons.Default.Speed,
-                            contentDescription = "播放速度",
-                            tint = Color.White
-                        )
+                        IconButton(onClick = onPlaylistClick) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.QueueMusic,
+                                contentDescription = "播放列表",
+                                tint = Color.White
+                            )
+                        }
                     }
                 }
             }

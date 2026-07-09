@@ -7,14 +7,19 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import com.webdav.player.core.player.EngineType
 import com.webdav.player.core.player.MediaSource as AppMediaSource
 import com.webdav.player.core.player.PlaybackEvent
 import com.webdav.player.core.player.PlaybackState
 import com.webdav.player.core.player.PlayerEngine
+import com.webdav.player.core.player.TrackInfo
+import com.webdav.player.core.player.TrackType
 import com.webdav.player.core.webdav.WebDavDataSourceFactory
 import com.webdav.player.data.model.PlayMode
 import com.webdav.player.data.repository.ServerConfigRepository
@@ -71,8 +76,11 @@ class ExoPlayerEngine @Inject constructor(
         val mediaSourceFactory = DefaultMediaSourceFactory(context)
             .setDataSourceFactory(dataSourceFactory)
 
+        val trackSelector = DefaultTrackSelector(context)
+
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(mediaSourceFactory)
+            .setTrackSelector(trackSelector)
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -82,6 +90,11 @@ class ExoPlayerEngine @Inject constructor(
             )
             .setHandleAudioBecomingNoisy(true)
             .build()
+    }
+
+    /** 获取 TrackSelector（用于音轨/字幕选择） */
+    private val trackSelector: DefaultTrackSelector? by lazy {
+        exoPlayer.trackSelector as? DefaultTrackSelector
     }
 
     /** 播放状态流 */
@@ -153,6 +166,10 @@ class ExoPlayerEngine @Inject constructor(
 
         override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) {
             // 速度变更回调
+        }
+
+        override fun onTracksChanged(tracks: Tracks) {
+            updateTrackInfo(tracks)
         }
     }
 
@@ -297,6 +314,157 @@ class ExoPlayerEngine @Inject constructor(
 
     /** 获取底层 ExoPlayer 实例（供 Service 使用） */
     fun getExoPlayer(): ExoPlayer = exoPlayer
+
+    // ============ M5: 音轨/字幕支持 ============
+
+    /** 可用音轨列表 */
+    private val _audioTracks = MutableStateFlow<List<TrackInfo>>(emptyList())
+    override val audioTracks: StateFlow<List<TrackInfo>> = _audioTracks.asStateFlow()
+
+    /** 可用字幕轨列表 */
+    private val _subtitleTracks = MutableStateFlow<List<TrackInfo>>(emptyList())
+    override val subtitleTracks: StateFlow<List<TrackInfo>> = _subtitleTracks.asStateFlow()
+
+    override fun getAudioTracks(): List<TrackInfo> = _audioTracks.value
+
+    override fun getSubtitleTracks(): List<TrackInfo> = _subtitleTracks.value
+
+    override fun selectAudioTrack(trackId: String) {
+        val selector = trackSelector ?: return
+        val tracks = exoPlayer.currentTracks
+
+        // 找到对应的音频轨道组
+        for (trackGroup in tracks.groups) {
+            if (trackGroup.type != C.TRACK_TYPE_AUDIO) continue
+
+            for (i in 0 until trackGroup.length) {
+                val format = trackGroup.getTrackFormat(i)
+                val id = format.id ?: continue
+                if (id == trackId) {
+                    val override = TrackSelectionOverride(trackGroup.mediaTrackGroup, i)
+                    selector.setParameters(
+                        selector.buildUponParameters()
+                            .setSelectionOverride(C.TRACK_TYPE_AUDIO, override)
+                            .build()
+                    )
+                    return
+                }
+            }
+        }
+    }
+
+    override fun selectSubtitleTrack(trackId: String) {
+        val selector = trackSelector ?: return
+        val tracks = exoPlayer.currentTracks
+
+        // 找到对应的字幕轨道组
+        for (trackGroup in tracks.groups) {
+            if (trackGroup.type != C.TRACK_TYPE_TEXT) continue
+
+            for (i in 0 until trackGroup.length) {
+                val format = trackGroup.getTrackFormat(i)
+                val id = format.id ?: continue
+                if (id == trackId) {
+                    val override = TrackSelectionOverride(trackGroup.mediaTrackGroup, i)
+                    selector.setParameters(
+                        selector.buildUponParameters()
+                            .setSelectionOverride(C.TRACK_TYPE_TEXT, override)
+                            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                            .build()
+                    )
+                    return
+                }
+            }
+        }
+    }
+
+    override fun disableSubtitle() {
+        val selector = trackSelector ?: return
+        selector.setParameters(
+            selector.buildUponParameters()
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                .build()
+        )
+    }
+
+    /**
+     * 从 ExoPlayer Tracks 更新轨道信息
+     */
+    private fun updateTrackInfo(tracks: Tracks) {
+        val audioList = mutableListOf<TrackInfo>()
+        val subtitleList = mutableListOf<TrackInfo>()
+
+        for (trackGroup in tracks.groups) {
+            when (trackGroup.type) {
+                C.TRACK_TYPE_AUDIO -> {
+                    for (i in 0 until trackGroup.length) {
+                        val format = trackGroup.getTrackFormat(i)
+                        val isSelected = trackGroup.isTrackSelected(i)
+                        audioList.add(
+                            TrackInfo(
+                                id = format.id ?: "audio_$i",
+                                language = format.language,
+                                title = format.label,
+                                trackType = TrackType.AUDIO,
+                                isSelected = isSelected
+                            )
+                        )
+                    }
+                }
+                C.TRACK_TYPE_TEXT -> {
+                    for (i in 0 until trackGroup.length) {
+                        val format = trackGroup.getTrackFormat(i)
+                        val isSelected = trackGroup.isTrackSelected(i)
+                        subtitleList.add(
+                            TrackInfo(
+                                id = format.id ?: "subtitle_$i",
+                                language = format.language,
+                                title = format.label,
+                                trackType = TrackType.SUBTITLE,
+                                isSelected = isSelected
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
+        _audioTracks.value = audioList
+        _subtitleTracks.value = subtitleList
+    }
+
+    /**
+     * 加载外部字幕（从 WebDAV 获取 .srt/.vtt 文件）
+     *
+     * @param subtitleUri 字幕文件 URI（webdav:// 协议）
+     * @param mimeType 字幕 MIME 类型
+     * @param language 字幕语言
+     * @param label 字幕标签
+     */
+    fun addExternalSubtitle(
+        subtitleUri: String,
+        mimeType: String,
+        language: String? = null,
+        label: String? = null
+    ) {
+        val subtitleConfig = androidx.media3.common.MediaItem.SubtitleConfiguration.Builder(
+            android.net.Uri.parse(subtitleUri)
+        )
+            .setMimeType(mimeType)
+            .apply {
+                if (language != null) setLanguage(language)
+                if (label != null) setLabel(label)
+            }
+            .build()
+
+        val currentIndex = exoPlayer.currentMediaItemIndex
+        val currentItem = exoPlayer.getMediaItemAt(currentIndex)
+        val newMediaItem = currentItem.buildUpon()
+            .setSubtitleConfigurations(listOf(subtitleConfig))
+            .build()
+
+        exoPlayer.replaceMediaItem(currentIndex, newMediaItem)
+    }
 
     // ============ 内部逻辑 ============
 

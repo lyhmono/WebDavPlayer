@@ -130,9 +130,7 @@ fun SettingsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
-                                if (engine == EngineType.EXOPLAYER) {
-                                    viewModel.setPlayerEngine(engine)
-                                }
+                                viewModel.setPlayerEngine(engine)
                             }
                             .padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -140,11 +138,8 @@ fun SettingsScreen(
                         RadioButton(
                             selected = playerEngine == engine,
                             onClick = {
-                                if (engine == EngineType.EXOPLAYER) {
-                                    viewModel.setPlayerEngine(engine)
-                                }
-                            },
-                            enabled = engine == EngineType.EXOPLAYER
+                                viewModel.setPlayerEngine(engine)
+                            }
                         )
                         Spacer(Modifier.width(8.dp))
                         Column {
@@ -152,9 +147,15 @@ fun SettingsScreen(
                                 text = engineDisplayName(engine),
                                 style = MaterialTheme.typography.bodyMedium
                             )
-                            if (engine != EngineType.EXOPLAYER) {
+                            if (engine == EngineType.SYSTEM) {
                                 Text(
                                     text = "即将支持",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.outline
+                                )
+                            } else {
+                                Text(
+                                    text = engineDescription(engine),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.outline
                                 )
@@ -580,6 +581,15 @@ private fun engineDisplayName(engine: EngineType): String = when (engine) {
     EngineType.EXOPLAYER -> "ExoPlayer (Media3)"
     EngineType.LIBVLC -> "LibVLC (VLC)"
     EngineType.SYSTEM -> "系统 MediaPlayer"
+}
+
+/**
+ * 获取引擎描述信息
+ */
+private fun engineDescription(engine: EngineType): String = when (engine) {
+    EngineType.EXOPLAYER -> "Android 原生播放内核，兼容性好"
+    EngineType.LIBVLC -> "VLC 内核，格式支持广泛"
+    EngineType.SYSTEM -> "系统播放器"
 }
 
 /**

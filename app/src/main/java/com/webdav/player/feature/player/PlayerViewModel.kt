@@ -3,11 +3,15 @@ package com.webdav.player.feature.player
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.webdav.player.core.player.EngineManager
+import com.webdav.player.core.player.EngineType
 import com.webdav.player.core.player.MediaSource
 import com.webdav.player.core.player.PlaybackEvent
 import com.webdav.player.core.player.PlaybackState
+import com.webdav.player.core.player.PlayerEngine
+import com.webdav.player.core.player.TrackInfo
 import com.webdav.player.core.player.exoplayer.ExoPlayerEngine
-import com.webdav.player.data.model.MediaType
+import com.webdav.player.core.player.libvlc.LibVlcPlayerEngine
 import com.webdav.player.data.model.PlayMode
 import com.webdav.player.data.model.Playlist
 import com.webdav.player.data.model.PlaylistItem
@@ -31,28 +35,56 @@ import javax.inject.Inject
 /**
  * 播放器 ViewModel
  *
- * 通过 ExoPlayerEngine 管理播放，同时提供队列管理、播放模式、进度等功能
+ * M5: 通过 EngineManager 管理播放引擎，支持引擎动态切换
+ * 暴露音轨/字幕 StateFlow，支持音轨/字幕切换
  */
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val exoPlayerEngine: ExoPlayerEngine,
+    private val engineManager: EngineManager,
     private val playlistRepository: PlaylistRepository,
     private val serverConfigRepository: ServerConfigRepository,
     private val webDavRepository: WebDavRepository
 ) : ViewModel() {
 
-    /** 播放状态 */
-    val playbackState: StateFlow<PlaybackState> = exoPlayerEngine.state
+    /** 当前引擎 */
+    private val currentEngine: PlayerEngine get() = engineManager.getCurrentEngine()
 
-    /** 当前队列 */
-    val queue: StateFlow<List<MediaSource>> = exoPlayerEngine.queue
+    /** 播放状态 */
+    val playbackState: StateFlow<PlaybackState> = currentEngine.state
+
+    /** 当前队列（从 ExoPlayer 或 LibVLC 引擎获取） */
+    val queue: StateFlow<List<MediaSource>>
+        get() = when (currentEngine) {
+            is ExoPlayerEngine -> (currentEngine as ExoPlayerEngine).queue
+            is LibVlcPlayerEngine -> (currentEngine as LibVlcPlayerEngine).queue
+            else -> MutableStateFlow(emptyList())
+        }
 
     /** 当前播放索引 */
-    val currentIndex: StateFlow<Int> = exoPlayerEngine.currentIndex
+    val currentIndex: StateFlow<Int>
+        get() = when (currentEngine) {
+            is ExoPlayerEngine -> (currentEngine as ExoPlayerEngine).currentIndex
+            is LibVlcPlayerEngine -> (currentEngine as LibVlcPlayerEngine).currentIndex
+            else -> MutableStateFlow(-1)
+        }
 
     /** 播放模式 */
-    val playMode: StateFlow<PlayMode> = exoPlayerEngine.playMode
+    val playMode: StateFlow<PlayMode>
+        get() = when (currentEngine) {
+            is ExoPlayerEngine -> (currentEngine as ExoPlayerEngine).playMode
+            is LibVlcPlayerEngine -> (currentEngine as LibVlcPlayerEngine).playMode
+            else -> MutableStateFlow(PlayMode.SEQUENCE)
+        }
+
+    /** 音轨列表 */
+    val audioTracks: StateFlow<List<TrackInfo>> = currentEngine.audioTracks
+
+    /** 字幕列表 */
+    val subtitleTracks: StateFlow<List<TrackInfo>> = currentEngine.subtitleTracks
+
+    /** 当前引擎类型 */
+    val currentEngineType: StateFlow<EngineType> = engineManager.currentEngineType
 
     /** 进度信息 */
     private val _progress = MutableStateFlow(ProgressInfo(0L, 0L))
@@ -78,7 +110,7 @@ class PlayerViewModel @Inject constructor(
     init {
         // 监听播放事件
         viewModelScope.launch {
-            exoPlayerEngine.events.collect { event ->
+            currentEngine.events.collect { event ->
                 when (event) {
                     is PlaybackEvent.ProgressChanged -> {
                         _progress.value = ProgressInfo(event.position, event.duration)
@@ -109,28 +141,31 @@ class PlayerViewModel @Inject constructor(
 
     // ============ 播放控制 ============
 
-    fun play() = exoPlayerEngine.play()
-    fun pause() = exoPlayerEngine.pause()
-    fun stop() = exoPlayerEngine.stop()
-    fun next() = exoPlayerEngine.next()
-    fun previous() = exoPlayerEngine.previous()
+    fun play() = currentEngine.play()
+    fun pause() = currentEngine.pause()
+    fun stop() = currentEngine.stop()
+    fun next() = currentEngine.next()
+    fun previous() = currentEngine.previous()
 
     fun seekTo(position: Long) {
-        exoPlayerEngine.seekTo(position)
+        currentEngine.seekTo(position)
         _progress.update { it.copy(position = position) }
     }
 
     // ============ 速度控制 ============
 
     fun setPlaybackSpeed(speed: Float) {
-        exoPlayerEngine.setPlaybackSpeed(speed)
+        currentEngine.setPlaybackSpeed(speed)
         _currentSpeed.value = speed
     }
 
     // ============ 播放模式 ============
 
     fun cyclePlayMode() {
-        exoPlayerEngine.cyclePlayMode()
+        when (currentEngine) {
+            is ExoPlayerEngine -> currentEngine.cyclePlayMode()
+            is LibVlcPlayerEngine -> currentEngine.cyclePlayMode()
+        }
     }
 
     // ============ 队列管理 ============
@@ -139,8 +174,8 @@ class PlayerViewModel @Inject constructor(
      * 播放单个文件（替换队列）
      */
     fun playFile(mediaSource: MediaSource) {
-        exoPlayerEngine.setMediaItems(listOf(mediaSource), 0)
-        exoPlayerEngine.play()
+        currentEngine.setMediaItems(listOf(mediaSource), 0)
+        currentEngine.play()
     }
 
     /**
@@ -148,44 +183,44 @@ class PlayerViewModel @Inject constructor(
      */
     fun playFiles(mediaSources: List<MediaSource>, startIndex: Int = 0) {
         if (mediaSources.isEmpty()) return
-        exoPlayerEngine.setMediaItems(mediaSources, startIndex)
-        exoPlayerEngine.play()
+        currentEngine.setMediaItems(mediaSources, startIndex)
+        currentEngine.play()
     }
 
     /**
      * 添加到队列末尾
      */
     fun addToQueue(mediaSource: MediaSource) {
-        exoPlayerEngine.addMediaItem(mediaSource)
+        currentEngine.addMediaItem(mediaSource)
     }
 
     /**
      * 添加多个到队列
      */
     fun addToQueue(mediaSources: List<MediaSource>) {
-        exoPlayerEngine.addMediaItems(mediaSources)
+        currentEngine.addMediaItems(mediaSources)
     }
 
     /**
      * 从队列中移除
      */
     fun removeFromQueue(index: Int) {
-        exoPlayerEngine.removeMediaItem(index)
+        currentEngine.removeMediaItem(index)
     }
 
     /**
      * 清空队列
      */
     fun clearQueue() {
-        exoPlayerEngine.clearMediaItems()
+        currentEngine.clearMediaItems()
     }
 
     /**
      * 跳转到队列中的指定项
      */
     fun playAtIndex(index: Int) {
-        exoPlayerEngine.seekToItem(index)
-        exoPlayerEngine.play()
+        currentEngine.seekToItem(index)
+        currentEngine.play()
     }
 
     // ============ WebDavEntry → MediaSource 转换 ============
@@ -195,9 +230,9 @@ class PlayerViewModel @Inject constructor(
      */
     fun webDavEntryToMediaSource(entry: WebDavEntry, serverId: Long): MediaSource {
         val mediaType = when {
-            entry.isVideo -> MediaType.VIDEO
-            entry.isAudio -> MediaType.AUDIO
-            else -> MediaType.UNKNOWN
+            entry.isVideo -> com.webdav.player.data.model.MediaType.VIDEO
+            entry.isAudio -> com.webdav.player.data.model.MediaType.AUDIO
+            else -> com.webdav.player.data.model.MediaType.UNKNOWN
         }
         return MediaSource(
             id = "${serverId}_${entry.path}",
@@ -276,6 +311,29 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
+    // ============ M5: 音轨/字幕控制 ============
+
+    fun selectAudioTrack(trackId: String) {
+        currentEngine.selectAudioTrack(trackId)
+    }
+
+    fun selectSubtitleTrack(trackId: String) {
+        currentEngine.selectSubtitleTrack(trackId)
+    }
+
+    fun disableSubtitle() {
+        currentEngine.disableSubtitle()
+    }
+
+    // ============ M5: 引擎切换 ============
+
+    /**
+     * 切换播放引擎
+     */
+    fun switchEngine(type: EngineType) {
+        engineManager.switchEngine(type)
+    }
+
     // ============ 进度跟踪 ============
 
     private fun startProgressTracking() {
@@ -283,8 +341,8 @@ class PlayerViewModel @Inject constructor(
         progressJob = viewModelScope.launch {
             while (true) {
                 _progress.value = ProgressInfo(
-                    position = exoPlayerEngine.currentPosition,
-                    duration = exoPlayerEngine.duration
+                    position = currentEngine.currentPosition,
+                    duration = currentEngine.duration
                 )
                 delay(500)
             }
@@ -296,8 +354,21 @@ class PlayerViewModel @Inject constructor(
         progressJob = null
     }
 
-    /** 获取底层 ExoPlayer 实例（供 UI 使用） */
-    fun getExoPlayer() = exoPlayerEngine.getExoPlayer()
+    /**
+     * 获取底层 ExoPlayer 实例（供 UI 使用，仅当当前引擎为 ExoPlayer 时可用）
+     */
+    fun getExoPlayer() = engineManager.getExoPlayerEngine()?.getExoPlayer()
+
+    /**
+     * 获取 LibVLC 引擎实例（供 UI 渲染使用，仅当当前引擎为 LibVLC 时可用）
+     */
+    fun getLibVlcEngine(): LibVlcPlayerEngine? {
+        return if (currentEngineType.value == EngineType.LIBVLC) {
+            engineManager.getLibVlcEngine()
+        } else {
+            null
+        }
+    }
 
     override fun onCleared() {
         super.onCleared()

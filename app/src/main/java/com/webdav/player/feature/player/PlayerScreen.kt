@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
@@ -23,26 +24,31 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.foundation.layout.wrapContentSize
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.ui.PlayerView
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.Icon
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.ui.PlayerView
+import com.webdav.player.core.player.EngineType
 import com.webdav.player.core.player.PlaybackState
 import com.webdav.player.data.model.MediaType
+import com.webdav.player.feature.player.components.AudioTrackDialog
+import com.webdav.player.feature.player.components.LibVlcVideoView
 import com.webdav.player.feature.player.components.PlayerControls
 import com.webdav.player.feature.player.components.PlaylistBottomSheet
 import com.webdav.player.feature.player.components.SpeedSelectorDialog
+import com.webdav.player.feature.player.components.SubtitleTrackDialog
 import com.webdav.player.feature.player.util.GestureHelper
 
 /**
  * 全屏播放页面
  *
- * 支持视频和音频播放，控制层 3 秒自动隐藏
+ * M5: 根据当前引擎类型渲染不同的视频视图
+ * - ExoPlayer: PlayerView (Media3)
+ * - LibVLC: LibVlcVideoView (Compose 封装 SurfaceView)
  */
 @OptIn(UnstableApi::class)
 @Composable
@@ -58,12 +64,15 @@ fun PlayerScreen(
     val playMode by viewModel.playMode.collectAsState()
     val currentMedia by viewModel.currentMedia.collectAsState()
     val currentSpeed by viewModel.currentSpeed.collectAsState()
+    val currentEngineType by viewModel.currentEngineType.collectAsState()
+    val audioTracks by viewModel.audioTracks.collectAsState()
+    val subtitleTracks by viewModel.subtitleTracks.collectAsState()
 
     var controlsVisible by remember { mutableStateOf(true) }
     var showPlaylistSheet by remember { mutableStateOf(false) }
     var showSpeedDialog by remember { mutableStateOf(false) }
-
-    val exoPlayer = remember { viewModel.getExoPlayer() }
+    var showAudioTrackDialog by remember { mutableStateOf(false) }
+    var showSubtitleDialog by remember { mutableStateOf(false) }
 
     // 锁定横屏（视频时）
     DisposableEffect(currentMedia?.mediaType) {
@@ -91,7 +100,7 @@ fun PlayerScreen(
         GestureHelper(
             context = context,
             onSeekPreview = { deltaMs ->
-                // 预览 seek（可选：显示 seek 预览 UI）
+                // 预览 seek
             },
             onSeekConfirm = { deltaMs ->
                 val newPosition = (progress.position + deltaMs).coerceIn(0, progress.duration)
@@ -121,16 +130,49 @@ fun PlayerScreen(
         // 视频播放区域 / 音频占位
         val isVideo = currentMedia?.mediaType == MediaType.VIDEO
         if (isVideo) {
-            AndroidView(
-                factory = { ctx ->
-                    PlayerView(ctx).apply {
-                        player = exoPlayer
-                        useController = false
-                        setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
+            // M5: 根据引擎类型选择不同的视频渲染视图
+            when (currentEngineType) {
+                EngineType.EXOPLAYER -> {
+                    val exoPlayer = remember { viewModel.getExoPlayer() }
+                    if (exoPlayer != null) {
+                        AndroidView(
+                            factory = { ctx ->
+                                PlayerView(ctx).apply {
+                                    player = exoPlayer
+                                    useController = false
+                                    setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
+                                }
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
                     }
-                },
-                modifier = Modifier.fillMaxSize()
-            )
+                }
+                EngineType.LIBVLC -> {
+                    val libVlcEngine = remember { viewModel.getLibVlcEngine() }
+                    if (libVlcEngine != null) {
+                        LibVlcVideoView(
+                            engine = libVlcEngine,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
+                else -> {
+                    // 降级到 ExoPlayer
+                    val exoPlayer = remember { viewModel.getExoPlayer() }
+                    if (exoPlayer != null) {
+                        AndroidView(
+                            factory = { ctx ->
+                                PlayerView(ctx).apply {
+                                    player = exoPlayer
+                                    useController = false
+                                    setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
+                                }
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
+            }
         } else {
             // 音频模式：显示专辑封面占位
             Column(
@@ -179,6 +221,8 @@ fun PlayerScreen(
             onPlayModeClick = { viewModel.cyclePlayMode() },
             onSpeedClick = { showSpeedDialog = true },
             onPlaylistClick = { showPlaylistSheet = true },
+            onAudioTrackClick = { showAudioTrackDialog = true },
+            onSubtitleClick = { showSubtitleDialog = true },
             onHideControls = { controlsVisible = false }
         )
     }
@@ -204,6 +248,25 @@ fun PlayerScreen(
             currentSpeed = currentSpeed,
             onSpeedSelected = { speed -> viewModel.setPlaybackSpeed(speed) },
             onDismiss = { showSpeedDialog = false }
+        )
+    }
+
+    // 音轨选择对话框
+    if (showAudioTrackDialog) {
+        AudioTrackDialog(
+            audioTracks = audioTracks,
+            onTrackSelected = { trackId -> viewModel.selectAudioTrack(trackId) },
+            onDismiss = { showAudioTrackDialog = false }
+        )
+    }
+
+    // 字幕选择对话框
+    if (showSubtitleDialog) {
+        SubtitleTrackDialog(
+            subtitleTracks = subtitleTracks,
+            onTrackSelected = { trackId -> viewModel.selectSubtitleTrack(trackId) },
+            onDisableSubtitle = { viewModel.disableSubtitle() },
+            onDismiss = { showSubtitleDialog = false }
         )
     }
 }

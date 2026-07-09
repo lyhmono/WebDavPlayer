@@ -113,4 +113,7 @@ dependencies {
 
     // Coil
     implementation(libs.coil.compose)
+
+    // LibVLC (VLC for Android)
+    implementation(libs.vlc.android)
 }

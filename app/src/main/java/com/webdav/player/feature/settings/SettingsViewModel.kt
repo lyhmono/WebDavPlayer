@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.webdav.player.BuildConfig
 import com.webdav.player.core.cache.ThumbnailCacheManager
+import com.webdav.player.core.player.EngineManager
 import com.webdav.player.core.player.EngineType
 import com.webdav.player.data.preferences.AppPreferences
 import com.webdav.player.feature.browser.SortField
@@ -22,13 +23,21 @@ import javax.inject.Inject
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val appPreferences: AppPreferences,
-    private val thumbnailCacheManager: ThumbnailCacheManager
+    private val thumbnailCacheManager: ThumbnailCacheManager,
+    private val engineManager: EngineManager
 ) : ViewModel() {
 
     // ============ 播放设置 ============
 
     val playerEngine: StateFlow<EngineType> = appPreferences.playerEngine
         .stateIn(viewModelScope, SharingStarted.Eagerly, EngineType.EXOPLAYER)
+
+    /** 当前引擎类型（来自 EngineManager，实时反映切换状态） */
+    val currentEngineType: StateFlow<EngineType> = engineManager.currentEngineType
+        .stateIn(viewModelScope, SharingStarted.Eagerly, EngineType.EXOPLAYER)
+
+    /** 可用引擎列表 */
+    val availableEngines: List<EngineType> = engineManager.availableEngines
 
     val autoPlayNext: StateFlow<Boolean> = appPreferences.autoPlayNext
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
@@ -92,7 +101,21 @@ class SettingsViewModel @Inject constructor(
     // ============ 修改方法 ============
 
     fun setPlayerEngine(engine: EngineType) {
-        viewModelScope.launch { appPreferences.setPlayerEngine(engine) }
+        viewModelScope.launch {
+            appPreferences.setPlayerEngine(engine)
+            // M5: 实际切换引擎
+            engineManager.switchEngine(engine)
+        }
+    }
+
+    /**
+     * 切换播放引擎（M5）
+     */
+    fun switchEngine(engine: EngineType) {
+        viewModelScope.launch {
+            appPreferences.setPlayerEngine(engine)
+            engineManager.switchEngine(engine)
+        }
     }
 
     fun setAutoPlayNext(enabled: Boolean) {
