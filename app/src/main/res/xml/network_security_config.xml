@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- 默认配置：信任系统 CA -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+    <!--
+      注意：自签证书通过 SelfSignedCertManager 在运行时处理，
+      用户确认后持久化指纹。此处允许明文流量以支持 HTTP 模式的 NAS。
+    -->
+</network-security-config>

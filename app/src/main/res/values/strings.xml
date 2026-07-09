@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">WebDAV 播放器</string>
+    <string name="welcome">欢迎使用 WebDAV 播放器</string>
+    <string name="add_server">添加服务器</string>
+    <string name="server_name">服务器名称</string>
+    <string name="server_url">服务器地址</string>
+    <string name="username">用户名</string>
+    <string name="password">密码</string>
+    <string name="test_connection">测试连接</string>
+    <string name="save">保存</string>
+    <string name="delete">删除</string>
+    <string name="cancel">取消</string>
+    <string name="confirm">确认</string>
+    <string name="connection_success">连接成功</string>
+    <string name="connection_failed">连接失败</string>
+    <string name="loading">加载中...</string>
+    <string name="no_servers">还没有添加服务器</string>
+    <string name="saved_servers">已保存的服务器</string>
+    <string name="play">播放</string>
+    <string name="pause">暂停</string>
+    <string name="next">下一首</string>
+    <string name="previous">上一首</string>
+    <string name="settings">设置</string>
+    <string name="playlist">播放列表</string>
+    <string name="browse">浏览</string>
+    <string name="cert_warning_title">证书安全警告</string>
+    <string name="cert_warning_message">服务器使用自签名证书，是否信任此证书？</string>
+    <string name="trust">信任</string>
+    <string name="not_trust">不信任</string>
+</resources>
