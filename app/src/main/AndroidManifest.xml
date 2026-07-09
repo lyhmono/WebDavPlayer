@@ -33,8 +33,11 @@
         <service
             android:name=".core.player.PlaybackService"
             android:exported="false"
-            android:foregroundServiceType="mediaPlayback"
-            tools:ignore="MissingClass" />
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
 
     </application>
 

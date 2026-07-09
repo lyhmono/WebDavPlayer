@@ -64,6 +64,11 @@ fun BrowserScreen(
     serverId: Long,
     encodedPath: String,
     onBack: () -> Unit,
+    onPlayFile: (WebDavEntry) -> Unit = {},
+    onPlayAll: (List<WebDavEntry>, Int) -> Unit = { _, _ -> },
+    onNavigateToPlayer: () -> Unit = {},
+    onNavigateToPlaylists: () -> Unit = {},
+    playerViewModel: com.webdav.player.feature.player.PlayerViewModel? = null,
     viewModel: BrowserViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -246,7 +251,9 @@ fun BrowserScreen(
                                             entry = entry,
                                             viewModel = viewModel,
                                             context = context,
-                                            onRenameRequest = { renameTarget = it }
+                                            onRenameRequest = { renameTarget = it },
+                                            onPlayFile = onPlayFile,
+                                            onNavigateToPlayer = onNavigateToPlayer
                                         )
                                     },
                                     onLongClick = {
@@ -288,6 +295,14 @@ fun BrowserScreen(
                     },
                     onSelectAll = { viewModel.selectAll() },
                     onCancel = { viewModel.exitSelectionMode() }
+                )
+            }
+
+            // 迷你播放器条
+            if (playerViewModel != null) {
+                com.webdav.player.feature.player.MiniPlayerBar(
+                    viewModel = playerViewModel,
+                    onClick = onNavigateToPlayer
                 )
             }
         }
@@ -334,7 +349,9 @@ private fun handleFileClick(
     entry: WebDavEntry,
     viewModel: BrowserViewModel,
     context: android.content.Context,
-    onRenameRequest: (WebDavEntry) -> Unit
+    onRenameRequest: (WebDavEntry) -> Unit,
+    onPlayFile: (WebDavEntry) -> Unit = {},
+    onNavigateToPlayer: () -> Unit = {}
 ) {
     val state = viewModel.uiState.value
 
@@ -346,12 +363,9 @@ private fun handleFileClick(
     if (entry.isDirectory) {
         viewModel.navigateToDirectory(entry.path)
     } else if (entry.isPlayable) {
-        // M2 先 Toast 提示，M3 接播放器
-        android.widget.Toast.makeText(
-            context,
-            "播放功能将在 M3 阶段实现: ${entry.displayName}",
-            android.widget.Toast.LENGTH_SHORT
-        ).show()
+        // M3: 调用播放器播放
+        onPlayFile(entry)
+        onNavigateToPlayer()
     } else {
         android.widget.Toast.makeText(
             context,

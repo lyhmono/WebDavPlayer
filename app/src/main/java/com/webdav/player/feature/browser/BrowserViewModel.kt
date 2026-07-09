@@ -442,6 +442,20 @@ class BrowserViewModel @Inject constructor(
         return thumbnailCacheManager.getVideoThumbnail(config, entry)
     }
 
+    // ============ 播放相关 ============
+
+    /**
+     * 获取当前服务器 ID
+     */
+    fun getCurrentServerId(): Long? = serverConfig?.id
+
+    /**
+     * 获取当前目录所有可播放文件
+     */
+    fun getPlayableEntries(): List<WebDavEntry> {
+        return _uiState.value.entries.filter { it.isPlayable }
+    }
+
     // ============ 辅助方法 ============
 
     /**
